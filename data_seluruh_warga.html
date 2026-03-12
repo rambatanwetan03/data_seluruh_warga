@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pendataan Warga Desa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar-link.active { background-color: #3b82f6; color: white; }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+    <!-- Login Page -->
+    <div id="login-page" class="min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-4">
+                    <i data-lucide="users" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">Sistem Pendataan Warga</h1>
+                <p class="text-gray-500">Silakan masuk untuk mengelola data</p>
+            </div>
+            <form id="login-form" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" id="username" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div class="relative">
+                        <input type="password" id="password" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                            <i data-lucide="eye" id="eye-icon" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition shadow-lg shadow-blue-200">
+                    Masuk
+                </button>
+            </form>
+            <div id="login-error" class="mt-4 text-center text-red-500 text-sm hidden">
+                Username atau Password salah!
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Application -->
+    <div id="app" class="hidden min-h-screen flex">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 hidden md:flex flex-col">
+            <div class="p-6 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="home" class="text-blue-400"></i>
+                    <span class="text-lg font-bold tracking-tight">SIDesa App</span>
+                </div>
+            </div>
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <button onclick="switchTab('dashboard')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition" data-tab="dashboard">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+                </button>
+                <button onclick="switchTab('warga')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition" data-tab="warga">
+                    <i data-lucide="user-plus" class="w-5 h-5"></i> Data Warga
+                </button>
+                <button onclick="switchTab('kk')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition" data-tab="kk">
+                    <i data-lucide="files" class="w-5 h-5"></i> Kartu Keluarga
+                </button>
+                <button onclick="switchTab('rt')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition" data-tab="rt">
+                    <i data-lucide="map" class="w-5 h-5"></i> Data RT
+                </button>
+                <button onclick="switchTab('rw')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition" data-tab="rw">
+                    <i data-lucide="map-pin" class="w-5 h-5"></i> Data RW
+                </button>
+                <button onclick="switchTab('laporan')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition" data-tab="laporan">
+                    <i data-lucide="file-text" class="w-5 h-5"></i> Laporan
+                </button>
+            </nav>
+            <div class="p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 mb-4 px-4">
+                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold" id="user-initial">A</div>
+                    <div class="overflow-hidden">
+                        <p class="text-sm font-medium truncate" id="user-display">Admin</p>
+                        <p class="text-xs text-slate-400" id="user-role">Super Admin</p>
+                    </div>
+                </div>
+                <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition">
+                    <i data-lucide="log-out" class="w-5 h-5"></i> Keluar
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col h-screen overflow-hidden">
+            <!-- Header -->
+            <header class="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+                <h2 id="page-title" class="text-xl font-bold text-gray-800">Dashboard</h2>
+                <div class="flex items-center gap-4">
+                    <span id="loading-spinner" class="hidden text-blue-600 animate-spin"><i data-lucide="loader-2"></i></span>
+                    <span id="current-date" class="text-sm text-gray-500"></span>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div id="content-area" class="flex-1 overflow-y-auto p-8">
+                
+                <!-- Dashboard Tab -->
+                <div id="tab-dashboard" class="tab-content space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <p class="text-sm font-medium text-gray-500">Total Warga</p>
+                            <h3 id="stat-total" class="text-3xl font-bold mt-2">0</h3>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <p class="text-sm font-medium text-gray-500">Laki-laki</p>
+                            <h3 id="stat-laki" class="text-3xl font-bold mt-2 text-blue-600">0</h3>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <p class="text-sm font-medium text-gray-500">Perempuan</p>
+                            <h3 id="stat-perempuan" class="text-3xl font-bold mt-2 text-pink-600">0</h3>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <p class="text-sm font-medium text-gray-500">Total RT</p>
+                            <h3 id="stat-rt" class="text-3xl font-bold mt-2">0</h3>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <p class="text-sm font-medium text-gray-500">Total RW</p>
+                            <h3 id="stat-rw" class="text-3xl font-bold mt-2">0</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                        <h4 class="text-lg font-semibold mb-2">Selamat Datang di Sistem Informasi Desa</h4>
+                        <p class="text-gray-500">Sistem ini mengelola data kependudukan secara real-time dengan integrasi Supabase.</p>
+                    </div>
+                </div>
+
+                <!-- Warga Tab -->
+                <div id="tab-warga" class="tab-content hidden space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="relative flex-1 max-w-md">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                <i data-lucide="search" class="w-5 h-5"></i>
+                            </span>
+                            <input type="text" id="search-warga" onkeyup="searchWarga()" placeholder="Cari Nama atau NIK..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="exportToExcel('warga')" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                                <i data-lucide="download" class="w-4 h-4"></i> Export Excel
+                            </button>
+                            <button id="btn-add-warga" onclick="openModal('modal-warga')" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                                <i data-lucide="plus" class="w-4 h-4"></i> Tambah Warga
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                                    <tr>
+                                        <th class="px-6 py-4">NIK KTP</th>
+                                        <th class="px-6 py-4">Nama Lengkap</th>
+                                        <th class="px-6 py-4">JK</th>
+                                        <th class="px-6 py-4">Alamat</th>
+                                        <th class="px-6 py-4">RT/RW</th>
+                                        <th class="px-6 py-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-warga-body" class="divide-y divide-gray-100">
+                                    <!-- Dynamic Content -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="px-6 py-4 bg-gray-50 border-t flex items-center justify-between">
+                            <span class="text-sm text-gray-500" id="pagination-info">Menampilkan 0-0 dari 0 data</span>
+                            <div class="flex gap-2">
+                                <button onclick="changePage(-1)" class="px-3 py-1 bg-white border rounded hover:bg-gray-100">Prev</button>
+                                <button onclick="changePage(1)" class="px-3 py-1 bg-white border rounded hover:bg-gray-100">Next</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other Tabs (KK, RT, RW Placeholder) -->
+                <div id="tab-kk" class="tab-content hidden space-y-6">
+                   <div class="bg-white p-8 rounded-xl shadow-sm text-center">Data Kartu Keluarga (Segera Hadir / Terhubung ke Database)</div>
+                </div>
+                <div id="tab-rt" class="tab-content hidden space-y-6">
+                    <div class="bg-white p-8 rounded-xl shadow-sm text-center">Data RT (Segera Hadir)</div>
+                </div>
+                <div id="tab-rw" class="tab-content hidden space-y-6">
+                    <div class="bg-white p-8 rounded-xl shadow-sm text-center">Data RW (Segera Hadir)</div>
+                </div>
+                <div id="tab-laporan" class="tab-content hidden space-y-6">
+                    <div class="bg-white p-8 rounded-xl shadow-sm text-center">Modul Laporan Statistik Desa</div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Form Warga -->
+    <div id="modal-warga" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
+            <div class="px-8 py-6 border-b flex justify-between items-center">
+                <h3 class="text-xl font-bold" id="modal-title">Form Data Warga</h3>
+                <button onclick="closeModal('modal-warga')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x"></i></button>
+            </div>
+            <form id="warga-form" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <input type="hidden" id="warga-id">
+                <div>
+                    <label class="block text-sm font-medium mb-1">NIK</label>
+                    <input type="text" id="warga-nik" required class="w-full border p-2 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Nama Lengkap</label>
+                    <input type="text" id="warga-nama" required class="w-full border p-2 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Jenis Kelamin</label>
+                    <select id="warga-jk" class="w-full border p-2 rounded-lg">
+                        <option value="Laki-laki">Laki-laki</option>
+                        <option value="Perempuan">Perempuan</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Tempat Lahir</label>
+                    <input type="text" id="warga-tempat-lahir" class="w-full border p-2 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Tanggal Lahir</label>
+                    <input type="date" id="warga-tgl-lahir" class="w-full border p-2 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">No KK</label>
+                    <input type="text" id="warga-no-kk" class="w-full border p-2 rounded-lg">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium mb-1">Alamat</label>
+                    <textarea id="warga-alamat" rows="2" class="w-full border p-2 rounded-lg"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">RT</label>
+                    <input type="number" id="warga-rt" class="w-full border p-2 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">RW</label>
+                    <input type="number" id="warga-rw" class="w-full border p-2 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Agama</label>
+                    <select id="warga-agama" class="w-full border p-2 rounded-lg">
+                        <option>Islam</option><option>Kristen</option><option>Katolik</option><option>Hindu</option><option>Budha</option><option>Khonghucu</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Pekerjaan</label>
+                    <input type="text" id="warga-pekerjaan" class="w-full border p-2 rounded-lg">
+                </div>
+                <div class="md:col-span-2 flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closeModal('modal-warga')" class="px-6 py-2 border rounded-lg hover:bg-gray-100">Batal</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-8 right-8 px-6 py-3 rounded-lg shadow-2xl text-white transform translate-y-20 transition-transform duration-300 z-50"></div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const supabaseUrl = "https://neamefjrslopwcnjozgh.supabase.co";
+        const supabaseKey = "sb_publishable_j2rjWLmQfKAhSK-3KhbDxg_8F3kC3PM"; 
+        
+        let supabaseClient = null;
+        if (supabaseUrl && supabaseKey) {
+            supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+        }
+
+        let currentUser = null;
+        let wargaData = [];
+        let currentPage = 1;
+        const perPage = 10;
+        let searchQuery = "";
+
+        // --- AUTH SYSTEM ---
+        const admins = {
+            "Ameth03": { pass: "Istimewa03", role: "Super Admin", access: "full" },
+            "Ramwet03": { pass: "Istimewa03", role: "Viewer", access: "view" }
+        };
+
+        // On Page Load: Check Persistence
+        window.addEventListener('load', () => {
+            const savedUser = localStorage.getItem('sidesa_session');
+            if (savedUser) {
+                const userData = JSON.parse(savedUser);
+                loginSuccess(userData.username, userData, true);
+            }
+            lucide.createIcons();
+        });
+
+        // Toggle Password
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eye-icon');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+
+            if (admins[u] && admins[u].pass === p) {
+                loginSuccess(u, admins[u]);
+            } else {
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        });
+
+        function loginSuccess(username, data, isAutoLogin = false) {
+            currentUser = { username, ...data };
+            
+            // Save to localStorage
+            localStorage.setItem('sidesa_session', JSON.stringify(currentUser));
+
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            document.getElementById('user-display').innerText = username;
+            document.getElementById('user-role').innerText = data.role;
+            document.getElementById('user-initial').innerText = username[0];
+            
+            if (currentUser.access === 'view') {
+                const addBtn = document.getElementById('btn-add-warga');
+                if (addBtn) addBtn.style.display = 'none';
+            }
+
+            initApp();
+            if (!isAutoLogin) {
+                showToast("Selamat Datang, " + username, "blue");
+            }
+        }
+
+        function logout() {
+            // Remove from localStorage
+            localStorage.removeItem('sidesa_session');
+            
+            currentUser = null;
+            document.getElementById('app').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+            document.getElementById('login-form').reset();
+            document.getElementById('password').type = 'password';
+            lucide.createIcons();
+        }
+
+        // --- CORE LOGIC ---
+        function initApp() {
+            lucide.createIcons();
+            document.getElementById('current-date').innerText = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            switchTab('dashboard');
+            fetchStats();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.sidebar-link').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            const titles = {
+                dashboard: 'Dashboard Statistik',
+                warga: 'Data Kependudukan Warga',
+                kk: 'Data Kartu Keluarga',
+                rt: 'Manajemen RT',
+                rw: 'Manajemen RW',
+                laporan: 'Laporan Desa'
+            };
+            document.getElementById('page-title').innerText = titles[tabId];
+            if (tabId === 'warga') fetchWarga();
+            if (tabId === 'dashboard') fetchStats();
+        }
+
+        async function fetchWarga() {
+            setLoading(true);
+            try {
+                if (!supabaseClient) {
+                    // Only generate mock if data is empty to prevent resetting on every tab switch
+                    if (wargaData.length === 0) wargaData = generateMockData(20);
+                } else {
+                    const { data, error } = await supabaseClient
+                        .from('data_seluruh_warga')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    if (error) throw error;
+                    wargaData = data;
+                }
+                renderWargaTable();
+            } catch (err) {
+                showToast("Gagal mengambil data", "red");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function saveWarga(e) {
+            e.preventDefault();
+            if (currentUser.access === 'view') {
+                showToast("Anda tidak memiliki izin edit!", "red");
+                return;
+            }
+            const id = document.getElementById('warga-id').value;
+            const payload = {
+                nik: document.getElementById('warga-nik').value,
+                nama_lengkap: document.getElementById('warga-nama').value,
+                jenis_kelamin: document.getElementById('warga-jk').value,
+                tempat_lahir: document.getElementById('warga-tempat-lahir').value,
+                tanggal_lahir: document.getElementById('warga-tgl-lahir').value,
+                no_kk: document.getElementById('warga-no-kk').value,
+                alamat: document.getElementById('warga-alamat').value,
+                rt: document.getElementById('warga-rt').value,
+                rw: document.getElementById('warga-rw').value,
+                agama: document.getElementById('warga-agama').value,
+                pekerjaan: document.getElementById('warga-pekerjaan').value,
+            };
+            setLoading(true);
+            try {
+                if (supabaseClient) {
+                    if (id) await supabaseClient.from('data_seluruh_warga').update(payload).eq('id', id);
+                    else await supabaseClient.from('data_seluruh_warga').insert([payload]);
+                } else {
+                    if (id) {
+                        const idx = wargaData.findIndex(w => w.id == id);
+                        wargaData[idx] = { ...wargaData[idx], ...payload };
+                    } else {
+                        wargaData.unshift({ id: Date.now(), ...payload });
+                    }
+                }
+                showToast("Data warga berhasil disimpan", "green");
+                closeModal('modal-warga');
+                fetchWarga();
+                fetchStats();
+            } catch (err) {
+                showToast("Gagal menyimpan data", "red");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function deleteWarga(id) {
+            if (currentUser.access === 'view') return;
+            if (!confirm("Hapus data warga ini?")) return;
+            setLoading(true);
+            try {
+                if (supabaseClient) await supabaseClient.from('data_seluruh_warga').delete().eq('id', id);
+                else wargaData = wargaData.filter(w => w.id != id);
+                showToast("Data dihapus", "blue");
+                renderWargaTable();
+                fetchStats();
+            } catch (err) {
+                showToast("Gagal menghapus data", "red");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function fetchStats() {
+            let total = wargaData.length;
+            let laki = wargaData.filter(w => w.jenis_kelamin === 'Laki-laki').length;
+            let pr = total - laki;
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-laki').innerText = laki;
+            document.getElementById('stat-perempuan').innerText = pr;
+            document.getElementById('stat-rt').innerText = 30;
+            document.getElementById('stat-rw').innerText = 8;
+        }
+
+        function renderWargaTable() {
+            const container = document.getElementById('table-warga-body');
+            container.innerHTML = '';
+            let filtered = wargaData.filter(w => 
+                w.nama_lengkap.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                w.nik.includes(searchQuery)
+            );
+            const start = (currentPage - 1) * perPage;
+            const paginated = filtered.slice(start, start + perPage);
+            if (paginated.length === 0) {
+                container.innerHTML = `<tr><td colspan="6" class="px-6 py-10 text-center text-gray-500">Tidak ada data ditemukan.</td></tr>`;
+            }
+            paginated.forEach(w => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-mono text-sm">${w.nik}</td>
+                    <td class="px-6 py-4 font-medium">${w.nama_lengkap}</td>
+                    <td class="px-6 py-4 text-sm">${w.jenis_kelamin === 'Laki-laki' ? 'L' : 'P'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${w.alamat || '-'}</td>
+                    <td class="px-6 py-4 text-sm">${w.rt || '0'}/${w.rw || '0'}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex justify-center gap-2">
+                            <button onclick='editWarga(${JSON.stringify(w).replace(/'/g, "&apos;")})' class="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button onclick="deleteWarga(${w.id})" class="p-1.5 text-red-600 hover:bg-red-50 rounded ${currentUser.access === 'view' ? 'hidden' : ''}"><i data-lucide="trash" class="w-4 h-4"></i></button>
+                        </div>
+                    </td>
+                `;
+                container.appendChild(tr);
+            });
+            document.getElementById('pagination-info').innerText = `Menampilkan ${start+1}-${Math.min(start+perPage, filtered.length)} dari ${filtered.length} data`;
+            lucide.createIcons();
+        }
+
+        function searchWarga() {
+            searchQuery = document.getElementById('search-warga').value;
+            currentPage = 1;
+            renderWargaTable();
+        }
+
+        function changePage(dir) {
+            currentPage += dir;
+            if (currentPage < 1) currentPage = 1;
+            renderWargaTable();
+        }
+
+        function editWarga(w) {
+            openModal('modal-warga');
+            document.getElementById('modal-title').innerText = "Edit Data Warga";
+            document.getElementById('warga-id').value = w.id;
+            document.getElementById('warga-nik').value = w.nik;
+            document.getElementById('warga-nama').value = w.nama_lengkap;
+            document.getElementById('warga-jk').value = w.jenis_kelamin;
+            document.getElementById('warga-tempat-lahir').value = w.tempat_lahir || '';
+            document.getElementById('warga-tgl-lahir').value = w.tanggal_lahir || '';
+            document.getElementById('warga-no-kk').value = w.no_kk || '';
+            document.getElementById('warga-alamat').value = w.alamat || '';
+            document.getElementById('warga-rt').value = w.rt || '';
+            document.getElementById('warga-rw').value = w.rw || '';
+            document.getElementById('warga-agama').value = w.agama || 'Islam';
+            document.getElementById('warga-pekerjaan').value = w.pekerjaan || '';
+        }
+
+        function openModal(id) {
+            document.getElementById(id).style.display = 'flex';
+            if (id === 'modal-warga') {
+                document.getElementById('warga-form').reset();
+                document.getElementById('warga-id').value = '';
+                document.getElementById('modal-title').innerText = "Tambah Data Warga";
+            }
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function showToast(msg, color) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.backgroundColor = color === 'red' ? '#ef4444' : color === 'green' ? '#10b981' : '#3b82f6';
+            t.style.transform = 'translateY(0)';
+            setTimeout(() => { t.style.transform = 'translateY(100px)'; }, 3000);
+        }
+
+        function setLoading(isLoading) {
+            document.getElementById('loading-spinner').classList.toggle('hidden', !isLoading);
+        }
+
+        function exportToExcel(type) {
+            if (wargaData.length === 0) return showToast("Tidak ada data", "red");
+            const worksheet = XLSX.utils.json_to_sheet(wargaData);
+            const workbook = XLSX.utils.book_new();
+            const fileName = `Data_Warga_${new Date().toISOString().split('T')[0]}`;
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Data Warga");
+            XLSX.writeFile(workbook, `${fileName}.xlsx`);
+            showToast("Export Berhasil", "green");
+        }
+
+        function generateMockData(count) {
+            const list = [];
+            for(let i=1; i<=count; i++) {
+                list.push({
+                    id: i,
+                    nik: "3201" + Math.floor(Math.random() * 10000000000).toString().padStart(10, '0'),
+                    nama_lengkap: ["Budi Santoso", "Siti Aminah", "Joko Widodo", "Ani Yudhoyono", "Agus Setiawan", "Rina Marlina"][i % 6] + " " + i,
+                    jenis_kelamin: i % 2 === 0 ? "Laki-laki" : "Perempuan",
+                    alamat: "Jl. Desa Makmur No. " + i,
+                    rt: Math.floor(Math.random() * 5) + 1,
+                    rw: Math.floor(Math.random() * 2) + 1,
+                    no_kk: "320100" + (1000 + i),
+                    agama: "Islam",
+                    pekerjaan: "Wiraswasta"
+                });
+            }
+            return list;
+        }
+
+        document.getElementById('warga-form').addEventListener('submit', saveWarga);
+    </script>
+</body>
+</html>
